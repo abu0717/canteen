@@ -7,7 +7,14 @@ from app.websockets import routes as ws_routes
 from app.database import Base, engine
 from app import models
 
-app = FastAPI(title="Canteen Management API")
+app = FastAPI(
+    title="Canteen Management API",
+    description="API for managing canteen orders, cafes, and users",
+    version="1.0.0",
+    swagger_ui_parameters={
+        "persistAuthorization": True
+    }
+)
 
 app.add_middleware(
     CORSMiddleware,
