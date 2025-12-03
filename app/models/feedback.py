@@ -7,7 +7,7 @@ from app.database import Base
 class Feedback(Base):
     __tablename__ = "feedback"
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    student_id = Column(String, ForeignKey("user.id", ondelete="CASCADE"))
+    student_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
     order_id = Column(Integer, ForeignKey("order.id", ondelete="CASCADE"))
     comment = Column(Text, nullable=False)
     rating = Column(Float, default=1)

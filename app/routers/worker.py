@@ -48,7 +48,7 @@ def assign_worker_to_cafe(
         raise HTTPException(status_code=404, detail="Cafe not found or you don't have access")
 
     user_check = db.execute(
-        text("SELECT id, name, email, role FROM user WHERE id = :user_id"),
+        text("SELECT id, name, email, role FROM users WHERE id = :user_id"),
         {"user_id": worker.user_id}
     ).fetchone()
 
@@ -106,7 +106,7 @@ def get_cafe_workers(
         text("""
             SELECT cw.id, cw.user_id, cw.cafe_id, u.name as user_name, u.email as user_email, c.name as cafe_name
             FROM cafe_worker cw
-            JOIN user u ON cw.user_id = u.id
+            JOIN users u ON cw.user_id = u.id
             JOIN cafe c ON cw.cafe_id = c.id
             WHERE cw.cafe_id = :cafe_id
         """),

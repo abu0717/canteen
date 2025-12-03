@@ -60,7 +60,7 @@ def create_feedback(
     
     # Get student name
     student_name = db.execute(
-        text("SELECT name FROM user WHERE id = :id"),
+        text("SELECT name FROM users WHERE id = :id"),
         {"id": student_id}
     ).fetchone()[0]
     
@@ -86,7 +86,7 @@ def get_cafe_feedbacks(
         SELECT f.id, f.student_id, f.order_id, f.comment, f.rating, f.cafe_id, f.created_at,
                u.name as student_name
         FROM feedback f
-        JOIN user u ON f.student_id = u.id
+        JOIN users u ON f.student_id = u.id
         WHERE f.cafe_id = :cafe_id
         ORDER BY f.created_at DESC
     """)
@@ -107,7 +107,7 @@ def get_owner_feedbacks(
         SELECT f.id, f.student_id, f.order_id, f.comment, f.rating, f.cafe_id, f.created_at,
                u.name as student_name
         FROM feedback f
-        JOIN user u ON f.student_id = u.id
+        JOIN users u ON f.student_id = u.id
         JOIN cafe c ON f.cafe_id = c.id
         WHERE c.owner_id = :user_id
         ORDER BY f.created_at DESC
@@ -129,7 +129,7 @@ def get_my_feedbacks(
         SELECT f.id, f.student_id, f.order_id, f.comment, f.rating, f.cafe_id, f.created_at,
                u.name as student_name
         FROM feedback f
-        JOIN user u ON f.student_id = u.id
+        JOIN users u ON f.student_id = u.id
         WHERE f.student_id = :student_id
         ORDER BY f.created_at DESC
     """)
@@ -151,7 +151,7 @@ def get_order_feedback(
         SELECT f.id, f.student_id, f.order_id, f.comment, f.rating, f.cafe_id, f.created_at,
                u.name as student_name
         FROM feedback f
-        JOIN user u ON f.student_id = u.id
+        JOIN users u ON f.student_id = u.id
         WHERE f.order_id = :order_id
     """)
     

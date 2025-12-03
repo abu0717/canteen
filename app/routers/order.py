@@ -185,7 +185,7 @@ def get_order(order_id: int, db: Session = Depends(get_db),
                                         u.name as account_name,
                                         c.name as cafe_name
                                  FROM "order" o
-                                 JOIN user u ON o.account_id = u.id
+                                 JOIN users u ON o.account_id = u.id
                                  JOIN cafe c ON o.cafe_id = c.id
                                  WHERE o.id = :order_id AND o.account_id = :account_id
                                  """),
@@ -235,7 +235,7 @@ def get_cafe_orders(cafe_id: str, db: Session = Depends(get_db),
                                     u.name as account_name,
                                     c.name as cafe_name
                              FROM "order" o
-                             JOIN user u ON o.account_id = u.id
+                             JOIN users u ON o.account_id = u.id
                              JOIN cafe c ON o.cafe_id = c.id
                              WHERE o.cafe_id = :cafe_id
                              ORDER BY o.created_at DESC
