@@ -93,7 +93,7 @@ async def create_order(order: OrderCreateSchema, db: Session = Depends(get_db),
                                         u.name as account_name,
                                         c.name as cafe_name
                                  FROM "order" o
-                                 JOIN user u ON o.account_id = u.id
+                                 JOIN users u ON o.account_id = u.id
                                  JOIN cafe c ON o.cafe_id = c.id
                                  WHERE o.id = :order_id
                                  """), {"order_id": order_id}).mappings().fetchone()
@@ -150,7 +150,7 @@ def get_history(db: Session = Depends(get_db),
                                     u.name as account_name,
                                     c.name as cafe_name
                              FROM "order" o
-                             JOIN user u ON o.account_id = u.id
+                             JOIN users u ON o.account_id = u.id
                              JOIN cafe c ON o.cafe_id = c.id
                              WHERE o.account_id = :account_id AND o.status = :status_completed
                              ORDER BY o.created_at DESC

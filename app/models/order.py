@@ -17,7 +17,7 @@ class StatusTypes(str, Enum):
 class Order(Base):
     __tablename__ = 'order'
     id = Column(Integer, primary_key=True)
-    account_id = Column(String, ForeignKey('user.id'), nullable=False)
+    account_id = Column(String, ForeignKey('users.id'), nullable=False)
     cafe_id = Column(String(36), ForeignKey('cafe.id'), nullable=False)
     note = Column(String, nullable=True)
     status = Column(String, default=StatusTypes.pending.value)
