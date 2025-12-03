@@ -43,7 +43,8 @@ def format_menu_item_response(row):
 @router.get("/cafes", response_model=List[CafeResponseSchema])
 def get_all_cafes(db: Session = Depends(get_db)):
     query = text("""
-                 SELECT id, name, location, image, owner_id, rating,
+                 SELECT id, name, location, image, owner_id, 
+                        COALESCE(rating, 0.0) AS rating,
                         COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at,
                         COALESCE(updated_at, CURRENT_TIMESTAMP) AS updated_at
                  FROM cafe
@@ -56,7 +57,8 @@ def get_all_cafes(db: Session = Depends(get_db)):
 @router.get("/cafes/{cafe_id}", response_model=CafeResponseSchema)
 def get_cafe_details(cafe_id: str, db: Session = Depends(get_db)):
     query = text("""
-                 SELECT id, name, location, image, owner_id, rating,
+                 SELECT id, name, location, image, owner_id, 
+                        COALESCE(rating, 0.0) AS rating,
                         COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at,
                         COALESCE(updated_at, CURRENT_TIMESTAMP) AS updated_at
                  FROM cafe
@@ -123,7 +125,8 @@ def get_cafes_by_public_category(public_category_name: str, db: Session = Depend
     Searches for menu items where the name contains the category name.
     """
     query = text("""
-                 SELECT DISTINCT c.id, c.name, c.location, c.image, c.owner_id, c.rating,
+                 SELECT DISTINCT c.id, c.name, c.location, c.image, c.owner_id, 
+                        COALESCE(c.rating, 0.0) AS rating,
                         COALESCE(c.created_at, CURRENT_TIMESTAMP) AS created_at,
                         COALESCE(c.updated_at, CURRENT_TIMESTAMP) AS updated_at
                  FROM cafe c

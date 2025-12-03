@@ -25,7 +25,7 @@ class CafeResponseSchema(BaseModel):
     location: str
     image: Optional[str] = None
     owner_id: str
-    rating: float
+    rating: Optional[float] = 0.0
     created_at: datetime
     updated_at: datetime
 
