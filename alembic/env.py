@@ -6,17 +6,25 @@ from sqlalchemy import pool
 from alembic import context
 import sys
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # make sure Alembic can import your app modules
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from app.database import Base
 from app.models.user import User
 from app.models.cafe_owner import CafeOwnerProfile
-from app.models.cafe import Cafe, Category, MenuItem, Inventory
+from app.models.cafe import Cafe, Category, MenuItem, Inventory, PublicCategory
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Override sqlalchemy.url with DATABASE_URL from environment if available
+if os.getenv("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

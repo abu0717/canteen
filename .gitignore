@@ -33,3 +33,12 @@ env/
 
 # Uploaded files
 uploads/
+
+# Database files (SQLite - no longer used)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Docker volumes (data persisted separately)
+postgres_data/

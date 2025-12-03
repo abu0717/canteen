@@ -15,7 +15,7 @@ class Cafe(Base):
     name = Column(String, nullable=False)
     location = Column(String, nullable=False)
     image = Column(String, nullable=True)
-    owner_id = Column(Integer, ForeignKey("cafe_owner_profile.id", ondelete="CASCADE"))
+    owner_id = Column(String, ForeignKey("cafe_owner_profile.id", ondelete="CASCADE"))
 
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
@@ -72,6 +72,6 @@ class Inventory(Base):
     kg = Column(Float, nullable=False)
     description = Column(String, nullable=True)
 
-    cafe_owner_id = Column(Integer, ForeignKey("cafe_owner_profile.id", ondelete="CASCADE"))
+    cafe_owner_id = Column(String, ForeignKey("cafe_owner_profile.id", ondelete="CASCADE"))
 
     cafe = relationship("Cafe", back_populates="inventory_items")

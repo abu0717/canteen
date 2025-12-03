@@ -1,9 +1,11 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.cafe_schema import (
     CafeResponseSchema, CafeCreateSchema, CafeUpdateSchema,
     CafeCategoryCreateSchema, CafeCategoryResponseSchema,
     CafeMenuItemCreateSchema, CafeMenuItemUpdateSchema, CafeMenuItemResponseSchema,
-    CafeInventoryCreateSchema, CafeInventoryUpdateSchema, CafeInventoryResponseSchema
+    CafeInventoryCreateSchema, CafeInventoryUpdateSchema, CafeInventoryResponseSchema,
+    PublicCategoryResponseSchema, PublicCategoryCreateSchema, PublicCategoryUpdateSchema
 )
 from app.routers.auth import get_current_user
 from uuid import uuid4
@@ -172,17 +174,31 @@ def get_cafe_categories(cafe_id: str, db: Session = Depends(get_db),
     return row
 
 
-@router.get("/public-categories")
+@router.get("/public-categories", response_model=List[PublicCategoryResponseSchema])
 def get_public_categories(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    """Get all available public categories for cafe owners to select from when creating menu items"""
-    query = text("""
-                 SELECT id, name, image
-                 FROM public_category
-                 ORDER BY name
-                 """)
-    result = db.execute(query)
-    rows = result.mappings().fetchall()
-    return [{"id": row["id"], "name": row["name"], "image": format_image_url(row["image"])} for row in rows]
+    try:
+        query = text("""
+                     SELECT id, name, image
+                     FROM public_category
+                     ORDER BY name
+                     """)
+        result = db.execute(query)
+        rows = result.mappings().fetchall()
+        
+        if not rows:
+            return []
+        
+        return [
+            {
+                "id": str(row["id"]), 
+                "name": row["name"], 
+                "image": format_image_url(row["image"])
+            } 
+            for row in rows
+        ]
+    except Exception as e:
+        print(f"Error fetching public categories: {e}")
+        return []
 
 
 @router.post("/categories", response_model=CafeCategoryResponseSchema)
