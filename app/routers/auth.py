@@ -1,0 +1,93 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from jose import jwt, JWTError
+from app.config import settings
+from app.database import get_db
+from app.models.user import User, UserRole
+from app.schemas.user_schema import UserCreate, UserLogin, UserResponse, TokenResponse
+from app.core.security import hash_password, verify_password, create_access_token
+from fastapi.security import OAuth2PasswordBearer
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/register", response_model=UserResponse)
+def register(user: UserCreate, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.email == user.email).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
+        )
+
+    hashed_password = hash_password(user.password)
+    new_user = User(
+        name=user.name,
+        email=user.email,
+        password_hash=hashed_password,
+        role=user.role.value,
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(login: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == login.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+
+    if not verify_password(login.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+
+    token = create_access_token(data={
+        "user_id": user.id,
+        "role": user.role
+    })
+
+    return TokenResponse(access_token=token, token_type="bearer")
+
+
+def get_current_user(
+        token: str = Depends(oauth2_scheme),
+        db: Session = Depends(get_db)
+):
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
+
+        user_id = payload.get("user_id")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        result = db.execute(
+            text("SELECT id, name, email, role FROM user WHERE id = :id"),
+            {"id": user_id}
+        ).mappings().fetchone()
+
+        if result is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return result  # <-- dict-like, Pydantic-friendly
+
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@router.get("/me", response_model=UserResponse)
+def read_current_user(current_user: User = Depends(get_current_user)):
+    return current_user

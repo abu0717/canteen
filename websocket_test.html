@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test - Canteen Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .disconnect {
+            background-color: #f44336;
+        }
+        .disconnect:hover {
+            background-color: #da190b;
+        }
+        .messages {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            background-color: #fafafa;
+        }
+        .message {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background-color: white;
+            border-left: 4px solid #4CAF50;
+        }
+        .message.new-order {
+            border-left-color: #ff9800;
+        }
+        .message.status-update {
+            border-left-color: #2196F3;
+        }
+        .message.error {
+            border-left-color: #f44336;
+        }
+        .status {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .status.disconnected {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .timestamp {
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 WebSocket Test Client</h1>
+
+        <div id="status" class="status disconnected">Disconnected</div>
+
+        <div class="input-group">
+            <label for="connectionType">Connection Type:</label>
+            <select id="connectionType">
+                <option value="cafe">Cafe Orders (Owner/Worker)</option>
+                <option value="student">Student Orders</option>
+            </select>
+        </div>
+
+        <div class="input-group" id="cafeIdGroup">
+            <label for="cafeId">Cafe ID:</label>
+            <input type="text" id="cafeId" placeholder="Enter cafe ID">
+        </div>
+
+        <div class="input-group">
+            <label for="token">JWT Token:</label>
+            <input type="text" id="token" placeholder="Enter your JWT token">
+        </div>
+
+        <button id="connectBtn" onclick="connect()">Connect</button>
+        <button id="disconnectBtn" onclick="disconnect()" style="display: none;" class="disconnect">Disconnect</button>
+
+        <div class="messages" id="messages">
+            <p style="color: #999; text-align: center;">No messages yet. Connect to see real-time updates.</p>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        const messagesDiv = document.getElementById('messages');
+        const statusDiv = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const connectionType = document.getElementById('connectionType');
+        const cafeIdGroup = document.getElementById('cafeIdGroup');
+
+        connectionType.addEventListener('change', function() {
+            if (this.value === 'student') {
+                cafeIdGroup.style.display = 'none';
+            } else {
+                cafeIdGroup.style.display = 'block';
+            }
+        });
+
+        function connect() {
+            const type = connectionType.value;
+            const token = document.getElementById('token').value;
+            const cafeId = document.getElementById('cafeId').value;
+
+            if (!token) {
+                alert('Please enter a JWT token');
+                return;
+            }
+
+            if (type === 'cafe' && !cafeId) {
+                alert('Please enter a cafe ID');
+                return;
+            }
+
+            let wsUrl;
+            if (type === 'cafe') {
+                wsUrl = `ws://localhost:8000/ws/cafe/${cafeId}?token=${token}`;
+            } else {
+                wsUrl = `ws://localhost:8000/ws/orders?token=${token}`;
+            }
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                statusDiv.textContent = 'Connected';
+                statusDiv.className = 'status connected';
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = 'block';
+                messagesDiv.innerHTML = '';
+                addMessage('System', 'Connected to WebSocket server', 'success');
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                console.log('Received:', data);
+
+                if (data.type === 'new_order') {
+                    addMessage('New Order', `
+                        <strong>Order #${data.order_id}</strong><br>
+                        Customer: ${data.customer_name}<br>
+                        Total: $${data.total_price}<br>
+                        Items: ${data.items_count}<br>
+                        Note: ${data.note || 'None'}<br>
+                        Status: ${data.status}
+                    `, 'new-order');
+                } else if (data.type === 'order_status_update') {
+                    addMessage('Status Update', `
+                        <strong>Order #${data.order_id}</strong><br>
+                        New Status: <strong>${data.status}</strong><br>
+                        Updated by: ${data.updated_by}
+                    `, 'status-update');
+                } else if (data.type === 'connection') {
+                    addMessage('System', data.message, 'success');
+                } else {
+                    addMessage('Message', JSON.stringify(data, null, 2), 'info');
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                addMessage('Error', 'WebSocket connection error', 'error');
+            };
+
+            ws.onclose = function() {
+                statusDiv.textContent = 'Disconnected';
+                statusDiv.className = 'status disconnected';
+                connectBtn.style.display = 'block';
+                disconnectBtn.style.display = 'none';
+                addMessage('System', 'Disconnected from WebSocket server', 'error');
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function addMessage(title, content, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            const now = new Date().toLocaleTimeString();
+            messageDiv.innerHTML = `
+                <strong>${title}</strong>
+                <span class="timestamp" style="float: right;">${now}</span><br>
+                <div style="margin-top: 5px;">${content}</div>
+            `;
+            messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
+        }
+    </script>
+</body>
+</html>
+
