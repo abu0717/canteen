@@ -44,7 +44,6 @@ async def create_order(order: OrderCreateSchema, db: Session = Depends(get_db),
 
         total_price += menu_item[0] * item.quantity
 
-    # Get current time in Uzbekistan timezone
     now_uzbekistan = datetime.now(UZBEKISTAN_TZ)
 
     order_result = db.execute(text("""
@@ -98,7 +97,6 @@ async def create_order(order: OrderCreateSchema, db: Session = Depends(get_db),
                                  WHERE o.id = :order_id
                                  """), {"order_id": order_id}).mappings().fetchone()
 
-    # Add menu_item_name to items
     items_with_names = []
     for item in order_items:
         item_dict = dict(item)
@@ -152,11 +150,10 @@ def get_history(db: Session = Depends(get_db),
                              FROM "order" o
                              JOIN users u ON o.account_id = u.id
                              JOIN cafe c ON o.cafe_id = c.id
-                             WHERE o.account_id = :account_id AND o.status = :status_completed
+                             WHERE o.account_id = :account_id
                              ORDER BY o.created_at DESC
                              """), {
-                                "account_id": current_user["id"],
-                                "status_completed": StatusTypes.completed.value
+                                "account_id": current_user["id"]
                             }).mappings().fetchall()
     result = []
     for order in orders:
@@ -213,10 +210,18 @@ def get_order(order_id: int, db: Session = Depends(get_db),
 def get_cafe_orders(cafe_id: str, db: Session = Depends(get_db),
                     current_user: dict = Depends(get_current_user)):
     if current_user["role"] == "cafe_owner":
+        # Get cafe_owner_profile.id for the current user
+        owner_profile = db.execute(text("""
+            SELECT id FROM cafe_owner_profile WHERE user_id = :user_id
+        """), {"user_id": current_user["id"]}).fetchone()
+        
+        if not owner_profile:
+            raise HTTPException(status_code=403, detail="Only cafe owners can access orders")
+        
         cafe_check = db.execute(text("""
                                      SELECT id FROM cafe 
                                      WHERE id = :cafe_id AND owner_id = :owner_id
-                                     """), {"cafe_id": cafe_id, "owner_id": current_user["id"]}).fetchone()
+                                     """), {"cafe_id": cafe_id, "owner_id": owner_profile[0]}).fetchone()
     elif current_user["role"] == "cafe_worker":
         cafe_check = db.execute(text("""
                                      SELECT c.id FROM cafe c
@@ -231,7 +236,8 @@ def get_cafe_orders(cafe_id: str, db: Session = Depends(get_db),
 
     orders = db.execute(text("""
                              SELECT o.id, o.account_id, o.cafe_id, o.note, o.status, o.total_price, 
-                                    o.created_at, o.updated_at,
+                                    o.created_at AT TIME ZONE 'UTC' as created_at, 
+                                    o.updated_at AT TIME ZONE 'UTC' as updated_at,
                                     u.name as account_name,
                                     c.name as cafe_name
                              FROM "order" o
@@ -245,7 +251,9 @@ def get_cafe_orders(cafe_id: str, db: Session = Depends(get_db),
     for order in orders:
         order_items = db.execute(text("""
                                       SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.price, 
-                                             oi.scheduled, oi.scheduled_time, oi.created_at, oi.updated_at,
+                                             oi.scheduled, oi.scheduled_time AT TIME ZONE 'UTC' as scheduled_time, 
+                                             oi.created_at AT TIME ZONE 'UTC' as created_at, 
+                                             oi.updated_at AT TIME ZONE 'UTC' as updated_at,
                                              m.name as menu_item_name
                                       FROM order_item oi
                                       JOIN menu_item m ON oi.menu_item_id = m.id
@@ -264,12 +272,19 @@ def get_cafe_orders(cafe_id: str, db: Session = Depends(get_db),
 async def update_order_status(order_id: int, order_update: OrderUpdateSchema,
                         db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     if current_user["role"] == "cafe_owner":
+        owner_profile = db.execute(text("""
+            SELECT id FROM cafe_owner_profile WHERE user_id = :user_id
+        """), {"user_id": current_user["id"]}).fetchone()
+        
+        if not owner_profile:
+            raise HTTPException(status_code=403, detail="Only cafe owners can update orders")
+        
         order_check = db.execute(text("""
                                       SELECT o.id, o.account_id, o.cafe_id FROM "order" AS o
                                       JOIN cafe AS c ON o.cafe_id = c.id
                                       WHERE o.id = :order_id AND c.owner_id = :owner_id
                                       """),
-                                {"order_id": order_id, "owner_id": current_user["id"]}).fetchone()
+                                {"order_id": order_id, "owner_id": owner_profile[0]}).fetchone()
     elif current_user["role"] == "cafe_worker":
         order_check = db.execute(text("""
                                       SELECT o.id, o.account_id, o.cafe_id FROM "order" AS o

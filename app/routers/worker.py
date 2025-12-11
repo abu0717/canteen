@@ -39,9 +39,18 @@ def assign_worker_to_cafe(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    # Get the cafe_owner_profile.id for this user
+    owner_profile = db.execute(
+        text("SELECT id FROM cafe_owner_profile WHERE user_id = :user_id"),
+        {"user_id": current_user["id"]}
+    ).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(status_code=403, detail="Only cafe owners can assign workers")
+    
     cafe_check = db.execute(
         text("SELECT id, name FROM cafe WHERE id = :cafe_id AND owner_id = :owner_id"),
-        {"cafe_id": worker.cafe_id, "owner_id": current_user["id"]}
+        {"cafe_id": worker.cafe_id, "owner_id": owner_profile[0]}
     ).fetchone()
 
     if not cafe_check:
@@ -94,9 +103,18 @@ def get_cafe_workers(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    # Get the cafe_owner_profile.id for this user
+    owner_profile = db.execute(
+        text("SELECT id FROM cafe_owner_profile WHERE user_id = :user_id"),
+        {"user_id": current_user["id"]}
+    ).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(status_code=403, detail="Only cafe owners can view workers")
+    
     cafe_check = db.execute(
         text("SELECT id FROM cafe WHERE id = :cafe_id AND owner_id = :owner_id"),
-        {"cafe_id": cafe_id, "owner_id": current_user["id"]}
+        {"cafe_id": cafe_id, "owner_id": owner_profile[0]}
     ).fetchone()
 
     if not cafe_check:
@@ -152,13 +170,22 @@ def remove_worker_from_cafe(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    # Get the cafe_owner_profile.id for this user
+    owner_profile = db.execute(
+        text("SELECT id FROM cafe_owner_profile WHERE user_id = :user_id"),
+        {"user_id": current_user["id"]}
+    ).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(status_code=403, detail="Only cafe owners can remove workers")
+    
     worker_check = db.execute(
         text("""
             SELECT cw.id FROM cafe_worker cw
             JOIN cafe c ON cw.cafe_id = c.id
             WHERE cw.id = :worker_id AND c.owner_id = :owner_id
         """),
-        {"worker_id": worker_id, "owner_id": current_user["id"]}
+        {"worker_id": worker_id, "owner_id": owner_profile[0]}
     ).fetchone()
 
     if not worker_check:

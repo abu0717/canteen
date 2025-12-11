@@ -1,11 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.encoders import jsonable_encoder
 from pathlib import Path
 from app.routers import auth, cafe, order, public, worker, worker_request, upload, feedback, admin
 from app.websockets import routes as ws_routes
 from app.database import Base, engine
 from app import models
+from datetime import datetime
+from pydantic import BaseModel
+
+class CustomJSONResponse:
+    @staticmethod
+    def custom_encoder(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError
 
 app = FastAPI(
     title="Canteen Management API",
@@ -18,7 +28,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"], 
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://16.16.65.190:3000", "*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

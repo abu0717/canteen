@@ -5,6 +5,7 @@ from jose import jwt, JWTError
 from app.config import settings
 from app.database import get_db
 from app.models.user import User, UserRole
+from app.models.cafe_owner import CafeOwnerProfile
 from app.schemas.user_schema import UserCreate, UserLogin, UserResponse, TokenResponse
 from app.core.security import hash_password, verify_password, create_access_token
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -33,6 +34,17 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    
+    if user.role.value == "cafe_owner":
+        owner_profile = CafeOwnerProfile(
+            user_id=new_user.id,
+            total_orders='0',
+            total_customers='0',
+            total_revenue='0'
+        )
+        db.add(owner_profile)
+        db.commit()
+    
     return new_user
 
 
@@ -104,7 +116,7 @@ def get_current_user(
             raise HTTPException(status_code=401, detail="Invalid token")
 
         result = db.execute(
-            text("SELECT id, name, email, role FROM user WHERE id = :id"),
+            text('SELECT id, name, email, role FROM users WHERE id = :id'),
             {"id": user_id}
         ).mappings().fetchone()
 

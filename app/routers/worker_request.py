@@ -6,6 +6,7 @@ from app.routers.auth import get_current_user
 from pydantic import BaseModel
 from typing import List
 from uuid import uuid4
+from datetime import datetime
 
 
 router = APIRouter(
@@ -30,7 +31,10 @@ class WorkerRequestResponse(BaseModel):
     user_name: str
     user_email: str
     cafe_name: str
-    created_at: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 @router.post("/", response_model=WorkerRequestResponse)
@@ -98,7 +102,7 @@ def create_worker_request(
     db.commit()
 
     user = db.execute(
-        text("SELECT name, email FROM \"user\" WHERE id = :user_id"),
+        text("SELECT name, email FROM users WHERE id = :user_id"),
         {"user_id": current_user["id"]}
     ).fetchone()
 
@@ -121,10 +125,19 @@ def get_cafe_requests(
     current_user: dict = Depends(get_current_user)
 ):
     """Get all worker requests for a cafe (owner only)"""
+    # Get cafe_owner_profile.id for the current user
+    owner_profile = db.execute(
+        text("SELECT id FROM cafe_owner_profile WHERE user_id = :user_id"),
+        {"user_id": current_user["id"]}
+    ).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(status_code=403, detail="Only cafe owners can view requests")
+    
     # Verify cafe ownership
     cafe_check = db.execute(
         text("SELECT id FROM cafe WHERE id = :cafe_id AND owner_id = :owner_id"),
-        {"cafe_id": cafe_id, "owner_id": current_user["id"]}
+        {"cafe_id": cafe_id, "owner_id": owner_profile[0]}
     ).fetchone()
 
     if not cafe_check:
@@ -138,7 +151,7 @@ def get_cafe_requests(
             SELECT wr.id, wr.user_id, wr.cafe_id, wr.status, wr.created_at,
                    u.name as user_name, u.email as user_email, c.name as cafe_name
             FROM worker_request wr
-            JOIN "user" u ON wr.user_id = u.id
+            JOIN users u ON wr.user_id = u.id
             JOIN cafe c ON wr.cafe_id = c.id
             WHERE wr.cafe_id = :cafe_id AND wr.status = 'pending'
             ORDER BY wr.created_at DESC
@@ -163,6 +176,18 @@ def update_request_status(
             detail="Status must be 'approved' or 'rejected'"
         )
 
+    # Get cafe_owner_profile.id for current user
+    owner_profile = db.execute(
+        text("SELECT id FROM cafe_owner_profile WHERE user_id = :user_id"),
+        {"user_id": current_user["id"]}
+    ).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(
+            status_code=403,
+            detail="Only cafe owners can update worker requests"
+        )
+
     # Get request and verify ownership
     request_data = db.execute(
         text("""
@@ -170,7 +195,7 @@ def update_request_status(
                    c.owner_id, u.name as user_name, u.email as user_email, c.name as cafe_name
             FROM worker_request wr
             JOIN cafe c ON wr.cafe_id = c.id
-            JOIN "user" u ON wr.user_id = u.id
+            JOIN users u ON wr.user_id = u.id
             WHERE wr.id = :request_id
         """),
         {"request_id": request_id}
@@ -179,7 +204,8 @@ def update_request_status(
     if not request_data:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    if request_data[4] != current_user["id"]:
+    # Compare cafe.owner_id with cafe_owner_profile.id
+    if request_data[4] != owner_profile[0]:
         raise HTTPException(
             status_code=403,
             detail="You don't have permission to update this request"
@@ -214,13 +240,25 @@ def update_request_status(
 
     db.commit()
 
+    updated_request = db.execute(
+        text("""
+            SELECT wr.id, wr.user_id, wr.cafe_id, wr.status, wr.created_at,
+                   u.name as user_name, u.email as user_email, c.name as cafe_name
+            FROM worker_request wr
+            JOIN cafe c ON wr.cafe_id = c.id
+            JOIN users u ON wr.user_id = u.id
+            WHERE wr.id = :request_id
+        """),
+        {"request_id": request_id}
+    ).fetchone()
+
     return {
-        "id": request_id,
-        "user_id": request_data[1],
-        "cafe_id": request_data[2],
-        "status": update.status,
-        "user_name": request_data[5],
-        "user_email": request_data[6],
-        "cafe_name": request_data[7],
-        "created_at": str(request_data[3])
+        "id": updated_request[0],
+        "user_id": updated_request[1],
+        "cafe_id": updated_request[2],
+        "status": updated_request[3],
+        "created_at": updated_request[4],
+        "user_name": updated_request[5],
+        "user_email": updated_request[6],
+        "cafe_name": updated_request[7]
     }

@@ -22,7 +22,7 @@ async def get_current_user_ws(token: str, db: Session):
             return None
 
         result = db.execute(
-            text("SELECT id, name, email, role FROM user WHERE id = :id"),
+            text("SELECT id, name, email, role FROM users WHERE id = :id"),
             {"id": user_id}
         ).mappings().fetchone()
 

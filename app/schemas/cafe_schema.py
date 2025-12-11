@@ -100,7 +100,7 @@ class CafeInventoryCreateSchema(BaseModel):
     quantity: float
     kg: float
     description: Optional[str] = None
-    cafe_owner_id: str
+    cafe_owner_id: Optional[str] = None  # Auto-set by backend
 
 
 class CafeInventoryUpdateSchema(BaseModel):

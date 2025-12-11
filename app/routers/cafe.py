@@ -19,13 +19,26 @@ router = APIRouter(
 )
 
 
+def get_owner_profile_id(current_user: dict, db: Session) -> str:
+    owner_profile = db.execute(
+        text("SELECT id FROM cafe_owner_profile WHERE user_id = :user_id"),
+        {"user_id": current_user["id"]}
+    ).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(
+            status_code=403,
+            detail="Only cafe owners can perform this action"
+        )
+    
+    return owner_profile[0]
+
+
 def format_image_url(image_path: str | None) -> str | None:
-    """Return image path as-is."""
     return image_path
 
 
 def format_cafe_response(row):
-    """Format cafe response with full image URL."""
     if not row:
         return None
     data = dict(row)
@@ -34,7 +47,6 @@ def format_cafe_response(row):
 
 
 def format_menu_item_response(row):
-    """Format menu item response with full image URL."""
     if not row:
         return None
     data = dict(row)
@@ -44,11 +56,22 @@ def format_menu_item_response(row):
 
 @router.post("/", response_model=CafeResponseSchema)
 def create_cafe(cafe: CafeCreateSchema, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    owner_profile = db.execute(text("""
+        SELECT id FROM cafe_owner_profile WHERE user_id = :user_id
+    """), {"user_id": current_user["id"]}).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(
+            status_code=403,
+            detail="Only cafe owners can create cafes. Please register as a cafe owner."
+        )
+    
     cafe_id = str(uuid4())
-    owner_id = current_user["id"]
+    owner_id = owner_profile[0]  
+    
     db.execute(text("""
-                    INSERT INTO cafe (id, name, location, image, owner_id, created_at, updated_at)
-                    VALUES (:id, :name, :location, :image, :owner_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    INSERT INTO cafe (id, name, location, image, owner_id, rating, created_at, updated_at)
+                    VALUES (:id, :name, :location, :image, :owner_id, 4.1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     """), {
                    "id": cafe_id,
                    "name": cafe.name,
@@ -70,6 +93,13 @@ def create_cafe(cafe: CafeCreateSchema, db: Session = Depends(get_db), current_u
 
 @router.get("/", response_model=list[CafeResponseSchema])
 def get_cafes(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    owner_profile = db.execute(text("""
+        SELECT id FROM cafe_owner_profile WHERE user_id = :user_id
+    """), {"user_id": current_user["id"]}).fetchone()
+    
+    if not owner_profile:
+        return [] 
+    
     query = text("""
                  SELECT id,
                         name,
@@ -83,7 +113,7 @@ def get_cafes(db: Session = Depends(get_db), current_user: dict = Depends(get_cu
                  WHERE owner_id = :owner_id;
                  """)
 
-    result = db.execute(query, {"owner_id": current_user["id"]})
+    result = db.execute(query, {"owner_id": owner_profile[0]})
 
     rows = result.mappings().fetchall()
 
@@ -92,6 +122,13 @@ def get_cafes(db: Session = Depends(get_db), current_user: dict = Depends(get_cu
 
 @router.get("/{cafe_id}", response_model=CafeResponseSchema)
 def get_cafe(cafe_id: str, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    owner_profile = db.execute(text("""
+        SELECT id FROM cafe_owner_profile WHERE user_id = :user_id
+    """), {"user_id": current_user["id"]}).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(status_code=404, detail="Cafe not found")
+    
     query = text("""
                  SELECT id,
                         name,
@@ -106,7 +143,7 @@ def get_cafe(cafe_id: str, db: Session = Depends(get_db), current_user: dict = D
                    AND owner_id = :owner_id;
                  """)
 
-    result = db.execute(query, {"cafe_id": cafe_id, "owner_id": current_user["id"]})
+    result = db.execute(query, {"cafe_id": cafe_id, "owner_id": owner_profile[0]})
     row = result.mappings().fetchone()
 
     if not row:
@@ -118,8 +155,15 @@ def get_cafe(cafe_id: str, db: Session = Depends(get_db), current_user: dict = D
 @router.put("/{cafe_id}", response_model=CafeResponseSchema)
 def update_cafe(cafe_id: str, cafe: CafeUpdateSchema, db: Session = Depends(get_db),
                 current_user: dict = Depends(get_current_user)):
+    owner_profile = db.execute(text("""
+        SELECT id FROM cafe_owner_profile WHERE user_id = :user_id
+    """), {"user_id": current_user["id"]}).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(status_code=403, detail="Only cafe owners can update cafes")
+    
     update_fields = []
-    params = {"cafe_id": cafe_id, "owner_id": current_user["id"]}
+    params = {"cafe_id": cafe_id, "owner_id": owner_profile[0]}
     
     if cafe.name is not None:
         update_fields.append("name = :name")
@@ -146,7 +190,7 @@ def update_cafe(cafe_id: str, cafe: CafeUpdateSchema, db: Session = Depends(get_
                              FROM cafe
                              WHERE id = :cafe_id
                                AND owner_id = :owner_id;
-                             """), {"cafe_id": cafe_id, "owner_id": current_user["id"]}).mappings().fetchone()
+                             """), {"cafe_id": cafe_id, "owner_id": get_owner_profile_id(current_user, db)}).mappings().fetchone()
 
     db.commit()
 
@@ -166,44 +210,52 @@ def get_cafe_categories(cafe_id: str, db: Session = Depends(get_db),
                    AND c.owner_id = :owner_id;
                  """)
 
-    result = db.execute(query, {"cafe_id": cafe_id, "owner_id": current_user["id"]})
-    if result:
-        row = result.mappings().fetchall()
-    else:
-        return None
-    return row
+    result = db.execute(query, {"cafe_id": cafe_id, "owner_id": get_owner_profile_id(current_user, db)})
+    row = result.mappings().fetchall()
+    return row if row else []
 
 
 @router.get("/public-categories", response_model=List[PublicCategoryResponseSchema])
-def get_public_categories(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    try:
-        query = text("""
-                     SELECT id, name, image
-                     FROM public_category
-                     ORDER BY name
-                     """)
-        result = db.execute(query)
-        rows = result.mappings().fetchall()
-        
-        if not rows:
-            return []
-        
-        return [
-            {
-                "id": str(row["id"]), 
-                "name": row["name"], 
-                "image": format_image_url(row["image"])
-            } 
-            for row in rows
-        ]
-    except Exception as e:
-        print(f"Error fetching public categories: {e}")
+def get_public_categories(db: Session = Depends(get_db)):
+    """Get all public categories - no authentication required"""
+    query = text("""
+                 SELECT id, name, image
+                 FROM public_category
+                 ORDER BY name
+                 """)
+    result = db.execute(query)
+    rows = result.mappings().fetchall()
+    
+    if not rows:
         return []
+    
+    return [
+        {
+            "id": str(row["id"]), 
+            "name": row["name"], 
+            "image": format_image_url(row["image"])
+        } 
+        for row in rows
+    ]
 
 
 @router.post("/categories", response_model=CafeCategoryResponseSchema)
 def create_cafe_category(category: CafeCategoryCreateSchema, db: Session = Depends(get_db),
                          current_user: dict = Depends(get_current_user)):
+    owner_profile = db.execute(text("""
+        SELECT id FROM cafe_owner_profile WHERE user_id = :user_id
+    """), {"user_id": current_user["id"]}).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(status_code=403, detail="Only cafe owners can create categories")
+    
+    cafe_check = db.execute(text("""
+        SELECT id FROM cafe WHERE id = :cafe_id AND owner_id = :owner_id
+    """), {"cafe_id": category.cafe_id, "owner_id": owner_profile[0]}).fetchone()
+    
+    if not cafe_check:
+        raise HTTPException(status_code=404, detail="Cafe not found or you don't own it")
+    
     category_id = str(uuid4())
 
     db.execute(text("""
@@ -229,10 +281,17 @@ def create_cafe_category(category: CafeCategoryCreateSchema, db: Session = Depen
 @router.post("/menu", response_model=CafeMenuItemResponseSchema)
 def create_cafe_menu_item(menu_item: CafeMenuItemCreateSchema, db: Session = Depends(get_db),
                           current_user: dict = Depends(get_current_user)):
+    owner_profile = db.execute(text("""
+        SELECT id FROM cafe_owner_profile WHERE user_id = :user_id
+    """), {"user_id": current_user["id"]}).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(status_code=403, detail="Only cafe owners can create menu items")
+    
     cafe_check = db.execute(text("""
                                  SELECT id FROM cafe 
                                  WHERE id = :cafe_id AND owner_id = :owner_id
-                                 """), {"cafe_id": menu_item.cafe_id, "owner_id": current_user["id"]}).fetchone()
+                                 """), {"cafe_id": menu_item.cafe_id, "owner_id": owner_profile[0]}).fetchone()
 
     if not cafe_check:
         raise HTTPException(status_code=404, detail="Cafe not found")
@@ -276,7 +335,7 @@ def get_cafe_menu_items(cafe_id: str, db: Session = Depends(get_db),
                  WHERE m.cafe_id = :cafe_id AND c.owner_id = :owner_id
                  """)
 
-    result = db.execute(query, {"cafe_id": cafe_id, "owner_id": current_user["id"]})
+    result = db.execute(query, {"cafe_id": cafe_id, "owner_id": get_owner_profile_id(current_user, db)})
     rows = result.mappings().fetchall()
 
     return [format_menu_item_response(row) for row in rows]
@@ -294,7 +353,7 @@ def get_menu_item(menu_item_id: str, db: Session = Depends(get_db),
                  WHERE m.id = :menu_item_id AND c.owner_id = :owner_id
                  """)
 
-    result = db.execute(query, {"menu_item_id": menu_item_id, "owner_id": current_user["id"]})
+    result = db.execute(query, {"menu_item_id": menu_item_id, "owner_id": get_owner_profile_id(current_user, db)})
     row = result.mappings().fetchone()
 
     if not row:
@@ -312,7 +371,7 @@ def update_menu_item(menu_item_id: str, menu_item: CafeMenuItemUpdateSchema,
                        WHERE m.id = :menu_item_id AND c.owner_id = :owner_id
                        """)
 
-    check_result = db.execute(check_query, {"menu_item_id": menu_item_id, "owner_id": current_user["id"]}).fetchone()
+    check_result = db.execute(check_query, {"menu_item_id": menu_item_id, "owner_id": get_owner_profile_id(current_user, db)}).fetchone()
 
     if not check_result:
         raise HTTPException(status_code=404, detail="Menu item not found")
@@ -364,7 +423,7 @@ def delete_menu_item(menu_item_id: str, db: Session = Depends(get_db),
                        WHERE m.id = :menu_item_id AND c.owner_id = :owner_id
                        """)
 
-    check_result = db.execute(check_query, {"menu_item_id": menu_item_id, "owner_id": current_user["id"]}).fetchone()
+    check_result = db.execute(check_query, {"menu_item_id": menu_item_id, "owner_id": get_owner_profile_id(current_user, db)}).fetchone()
 
     if not check_result:
         raise HTTPException(status_code=404, detail="Menu item not found")
@@ -376,10 +435,17 @@ def delete_menu_item(menu_item_id: str, db: Session = Depends(get_db),
 @router.post("/inventory", response_model=CafeInventoryResponseSchema)
 def create_inventory_item(inventory: CafeInventoryCreateSchema, db: Session = Depends(get_db),
                           current_user: dict = Depends(get_current_user)):
+    owner_profile = db.execute(text("""
+        SELECT id FROM cafe_owner_profile WHERE user_id = :user_id
+    """), {"user_id": current_user["id"]}).fetchone()
+    
+    if not owner_profile:
+        raise HTTPException(status_code=403, detail="Only cafe owners can create inventory items")
+    
     cafe_check = db.execute(text("""
                                  SELECT id FROM cafe 
                                  WHERE id = :cafe_id AND owner_id = :owner_id
-                                 """), {"cafe_id": inventory.cafe_id, "owner_id": current_user["id"]}).fetchone()
+                                 """), {"cafe_id": inventory.cafe_id, "owner_id": owner_profile[0]}).fetchone()
 
     if not cafe_check:
         raise HTTPException(status_code=404, detail="Cafe not found")
@@ -396,7 +462,7 @@ def create_inventory_item(inventory: CafeInventoryCreateSchema, db: Session = De
                    "quantity": inventory.quantity,
                    "kg": inventory.kg,
                    "description": inventory.description,
-                   "cafe_owner_id": inventory.cafe_owner_id,
+                   "cafe_owner_id": owner_profile[0],  
                })
 
     result = db.execute(text("""
@@ -420,7 +486,7 @@ def get_cafe_inventory(cafe_id: str, db: Session = Depends(get_db),
                  WHERE i.cafe_id = :cafe_id AND c.owner_id = :owner_id
                  """)
 
-    result = db.execute(query, {"cafe_id": cafe_id, "owner_id": current_user["id"]})
+    result = db.execute(query, {"cafe_id": cafe_id, "owner_id": get_owner_profile_id(current_user, db)})
     rows = result.mappings().fetchall()
 
     return rows
@@ -435,7 +501,7 @@ def update_inventory_item(inventory_id: str, inventory: CafeInventoryUpdateSchem
                            JOIN cafe AS c ON i.cafe_id = c.id
                            WHERE i.id = :inventory_id AND c.owner_id = :owner_id
                            """)
-        check_result = db.execute(check_query, {"inventory_id": inventory_id, "owner_id": current_user["id"]}).fetchone()
+        check_result = db.execute(check_query, {"inventory_id": inventory_id, "owner_id": get_owner_profile_id(current_user, db)}).fetchone()
     elif current_user["role"] == "cafe_worker":
         check_query = text("""
                            SELECT i.id FROM inventory AS i
@@ -492,7 +558,7 @@ def delete_inventory_item(inventory_id: str, db: Session = Depends(get_db),
                        WHERE i.id = :inventory_id AND c.owner_id = :owner_id
                        """)
 
-    check_result = db.execute(check_query, {"inventory_id": inventory_id, "owner_id": current_user["id"]}).fetchone()
+    check_result = db.execute(check_query, {"inventory_id": inventory_id, "owner_id": get_owner_profile_id(current_user, db)}).fetchone()
 
     if not check_result:
         raise HTTPException(status_code=404, detail="Inventory item not found")

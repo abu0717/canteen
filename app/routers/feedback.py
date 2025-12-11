@@ -109,7 +109,8 @@ def get_owner_feedbacks(
         FROM feedback f
         JOIN users u ON f.student_id = u.id
         JOIN cafe c ON f.cafe_id = c.id
-        WHERE c.owner_id = :user_id
+        JOIN cafe_owner_profile cop ON c.owner_id = cop.id
+        WHERE cop.user_id = :user_id
         ORDER BY f.created_at DESC
     """)
     

@@ -76,7 +76,7 @@ def get_cafe_menu(cafe_id: str, db: Session = Depends(get_db)):
                         COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at,
                         COALESCE(updated_at, CURRENT_TIMESTAMP) AS updated_at
                  FROM menu_item
-                 WHERE cafe_id = :cafe_id AND available = 1
+                 WHERE cafe_id = :cafe_id AND available = TRUE
                  """)
     result = db.execute(query, {"cafe_id": cafe_id})
     rows = result.mappings().fetchall()
@@ -102,7 +102,7 @@ def get_menu_items_by_category(category_id: str, db: Session = Depends(get_db)):
                         COALESCE(created_at, CURRENT_TIMESTAMP) AS created_at,
                         COALESCE(updated_at, CURRENT_TIMESTAMP) AS updated_at
                  FROM menu_item
-                 WHERE category_id = :category_id AND available = 1
+                 WHERE category_id = :category_id AND available = TRUE
                  """)
     result = db.execute(query, {"category_id": category_id})
     rows = result.mappings().fetchall()
@@ -131,7 +131,7 @@ def get_cafes_by_public_category(public_category_name: str, db: Session = Depend
                         COALESCE(c.updated_at, CURRENT_TIMESTAMP) AS updated_at
                  FROM cafe c
                  JOIN menu_item m ON c.id = m.cafe_id
-                 WHERE m.available = 1 
+                 WHERE m.available = TRUE 
                    AND (LOWER(m.name) LIKE LOWER(:category_name) 
                         OR LOWER(m.description) LIKE LOWER(:category_name))
                  ORDER BY c.rating DESC
